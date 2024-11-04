@@ -1,61 +1,149 @@
-import random
-
+# Lab 2
 # Task 1: Count records where Title field has a line longer than 30 characters
-def count_long_titles(filename):
-    with open(filename, 'r', encoding='utf-8') as file:
-        records = file.readlines()
-        long_title_count = sum(1 for record in records if len(record.split(',')[0]) > 30)  # Assuming Title is the first field
-    return long_title_count
+from csv import reader
+
+with open('books-en.csv', 'r', encoding='windows-1251') as csvfile:
+    table = reader(csvfile, delimiter=';')
+    
+    # Using list comprehension to count titles longer than 30 characters
+    long_titles_count = sum(1 for row in table if len(row[1]) > 30)
+
+    if long_titles_count == 0:
+        print('No books with titles longer than 30 characters.')
+    else:
+        print(f'Found {long_titles_count} books with titles longer than 30 characters.')
 
 # Task 2: Implement a book search by author
-def search_books_by_author(filename, author_name, limit):
-    with open(filename, 'r', encoding='utf-8') as file:
-        records = [record for record in file.readlines() if author_name.lower() in record.lower()]
-    return records[:limit]
+from csv import reader
+
+def search_books(query):
+    flag = 0  # label for quantity by search with limitation
+    with open('books-en.csv', 'r', encoding='windows-1251') as csvfile:
+        table = reader(csvfile, delimiter=';')
+        for row in table:
+            lower_case_title = row[2].lower()
+            index = lower_case_title.find(query.lower())
+            row[6] = row[6].replace(',', '.')  # Replace comma with dot for float conversion
+            
+            if index != -1 and float(row[6]) < 200:
+                print(row[1])
+                flag += 1
+
+    return flag
+
+while True:
+    search = input('Enter query: ')
+    if search == '0':
+        break
+    
+    results_count = search_books(search)
+
+    if results_count == 0:
+        print('Nothing found.')
+    else:
+        print(f'Found {results_count} results.')
 
 # Task 3: Generate bibliographic references
-def generate_bibliographic_references(filename, num_records=20):
-    with open(filename, 'r', encoding='utf-8') as file:
-        records = [record.strip() for record in file.readlines()]
-        random_records = random.sample(records, min(num_records, len(records)))  # Select random records
-        references = [f"{record.split(',')[1]}. {record.split(',')[0]} - {record.split(',')[2]}" for record in random_records]  # Assuming author, title, year
-    with open('bibliographic_references.txt', 'w', encoding='utf-8') as ref_file:
-        for index, reference in enumerate(references, 1):
-            ref_file.write(f"{index}. {reference}\n")
+from csv import reader
+import random
+
+# Read data from the CSV file
+with open('books-en.csv', 'r', encoding='windows-1251') as csvfile:
+    table = list(reader(csvfile, delimiter=';'))
+
+# Select 20 random rows
+random_rows = random.sample(table, 20)
+
+# Write selected rows to the output file
+with open('result.txt', 'w') as output:
+    for i, row in enumerate(random_rows, start=1):
+        output.write(f'{i}. {row[2]}. {row[1]} - {row[3]}\n')
+
+print('20 records generated')
 
 # Task 4: Parse currency.xml and extract data
-def parse_currency_xml(filename):
-    with open(filename, 'r', encoding='utf-8') as file:
-        content = file.read().splitlines()
-        tags = set()
-        currency_dict = {}
-        for line in content:
-            if '<Valute>' in line:
-                num_code = line.split('<NumCode>')[1].split('</NumCode>')[0]
-                char_code = line.split('<CharCode>')[1].split('</CharCode>')[0]
-                currency_dict[num_code] = char_code
-            tags.update(line.split('<')[1:])  # Extract tags
-        unique_tags = set(tag.split('>')[0] for tag in tags if '>' in tag)
-    return unique_tags, {k: v for k, v in currency_dict.items() if int(k) <= 200}
+import xml.dom.minidom as minidom
+from csv import reader
 
-# Usage
-books_csv = 'books-en.csv'  # Adjust the file name as necessary
-currency_xml = 'currency.xml'  # Adjust the file name as necessary
+def parse_currency(xml_file):
+    with open(xml_file, 'r') as file:
+        xml_data = file.read()
+        
+    dom = minidom.parseString(xml_data)
+    dom.normalize()
 
-# Count long titles
-long_titles_count = count_long_titles(books_en.csv)
-print(f"Number of records with title longer than 30 characters: {long_titles_count}")
+    elements = dom.getElementsByTagName('Valute')
+    currency_dict = {}
 
-# Search for books by author
-author_to_search = 'Some Author'  # Replace with the desired author name
-limit = 5  # Adjust limit as necessary
-found_books = search_books_by_author(books_csv, author_to_search, limit)
-print(f"Books by {author_to_search}: {found_books}")
+    for node in elements:
+        numcode = charcode = None
+        for child in node.childNodes:
+            if child.nodeType == 1:
+                if child.tagName == 'NumCode' and child.firstChild.nodeType == 3:
+                    numcode = child.firstChild.data
+                elif child.tagName == 'CharCode' and child.firstChild.nodeType == 3:
+                    charcode = child.firstChild.data
+        
+        if numcode and charcode:
+            currency_dict[numcode] = charcode
 
-# Generate bibliographic references
-generate_bibliographic_references(books_csv)
+        if node.getAttribute('id') == 'bk106':
+            print(node.getElementsByTagName('NumCode')[0].firstChild.data)
 
-# Parse XML and extract data
-unique_tags, currency_dict = parse_currency_xml(currency_xml)
-print(f"Unique tags: {unique_tags}")
-print(f"Currency Dictionary (NumCode - CharCode): {currency_dict}")
+    return currency_dict
+
+def get_unique_publishers(csv_file):
+    publisher = set()
+    with open(csv_file, 'r', encoding='windows-1251') as file:
+        table = list(reader(file, delimiter=';'))
+        table.pop(0)  # Remove header
+        for row in table:
+            publisher.add(row[4])
+    return publisher
+
+def get_most_popular_books(csv_file, n=20):
+    popular = []
+    with open(csv_file, 'r', encoding='windows-1251') as file:
+        table = list(reader(file, delimiter=';'))
+        table.pop(0)  # Remove header
+        for row in table:
+            book = row[1]
+            count = int(row[5])
+            popular.append((count, book))
+    
+    # Sort by count descending
+    popular = sorted(popular, key=lambda x: x[0], reverse=True)
+    return popular[:n]
+
+# Main execution
+currency_dict = parse_currency('currency.xml')
+for key, value in currency_dict.items():
+    print(key, value)
+
+unique_publishers = get_unique_publishers('books-en.csv')
+print(unique_publishers)
+
+most_popular_books = get_most_popular_books('books-en.csv')
+for num, (count, book) in enumerate(most_popular_books, start=1):
+    print(f'{num}. {book}')
+
+
+import dask.dataframe as dd
+
+# Load books-en.csv using Dask
+books_en_df = dd.read_csv('books-en.csv')
+
+# For unique publishers
+unique_publishers = books_en_df['Publisher'].unique().compute()
+
+print("Unique Publishers:")
+for publisher in unique_publishers:
+    print(publisher)
+
+# For most popular books
+# Assuming 'Popularity' is a column in your dataset
+most_popular_books = books_en_df.nlargest(20, 'Popularity').compute()
+
+print("\nMost Popular 20 Books:")
+for index, row in most_popular_books.iterrows():
+    print(f"{row['Title']} by {row['Author']} - Popularity: {row['Popularity']}")
